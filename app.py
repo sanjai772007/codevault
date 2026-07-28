@@ -17,25 +17,72 @@ import os
 import mimetypes
 
 
-# ==============================
+# =========================================================
 # CREATE FLASK APPLICATION
-# ==============================
+# =========================================================
 app = Flask(__name__)
 
 
-# ==============================
-# CONFIGURATION
-# ==============================
-app.config["SECRET_KEY"] = "codevault-secret-key-2026"
+# =========================================================
+# PROJECT PATHS
+# =========================================================
+BASE_DIR = os.path.abspath(
+    os.path.dirname(__file__)
+)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+UPLOAD_FOLDER = os.path.join(
+    BASE_DIR,
+    "uploads"
+)
+
+DATABASE_FOLDER = os.path.join(
+    BASE_DIR,
+    "instance"
+)
+
+DATABASE_PATH = os.path.join(
+    DATABASE_FOLDER,
+    "database.db"
+)
+
+
+# Create required folders
+os.makedirs(
+    UPLOAD_FOLDER,
+    exist_ok=True
+)
+
+os.makedirs(
+    DATABASE_FOLDER,
+    exist_ok=True
+)
+
+
+# =========================================================
+# APPLICATION CONFIGURATION
+# =========================================================
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY",
+    "codevault-development-secret-key-2026"
+)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    f"sqlite:///{DATABASE_PATH}"
+)
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-app.config["UPLOAD_FOLDER"] = "uploads"
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# Maximum upload size: 16 MB
+app.config["MAX_CONTENT_LENGTH"] = (
+    16 * 1024 * 1024
+)
 
 
-# Allowed file types
+# =========================================================
+# ALLOWED FILE EXTENSIONS
+# =========================================================
 ALLOWED_EXTENSIONS = {
     "py",
     "cpp",
@@ -58,22 +105,20 @@ ALLOWED_EXTENSIONS = {
 }
 
 
-# Create main uploads folder
-os.makedirs(
-    app.config["UPLOAD_FOLDER"],
-    exist_ok=True
-)
-
-
-# ==============================
+# =========================================================
 # DATABASE
-# ==============================
+# =========================================================
 db = SQLAlchemy(app)
 
+print("=" * 60)
+print("DATABASE URI:", app.config["SQLALCHEMY_DATABASE_URI"])
+print("DATABASE PATH:", DATABASE_PATH)
+print("=" * 60)
 
-# ==============================
-# USER TABLE
-# ==============================
+
+# =========================================================
+# USER MODEL
+# =========================================================
 class User(db.Model):
 
     id = db.Column(
@@ -92,11 +137,29 @@ class User(db.Model):
         nullable=False
     )
 
+    def __repr__(self):
+        return f"<User {self.username}>"
 
-# ==============================
+
+# =========================================================
+# CREATE DATABASE TABLES
+# =========================================================
+# This runs when Flask is started using:
+# python app.py
+#
+# It also runs when Render starts:
+# gunicorn app:app
+with app.app_context():
+    db.create_all()
+
+
+# =========================================================
 # HELPER FUNCTIONS
-# ==============================
+# =========================================================
 def allowed_file(filename):
+    """
+    Check whether the uploaded file has an allowed extension.
+    """
 
     return (
         "." in filename
@@ -106,15 +169,26 @@ def allowed_file(filename):
 
 
 def login_required():
+    """
+    Return True when a user is logged in.
+    """
 
     return "username" in session
 
 
 def get_user_folder():
+    """
+    Return the logged-in user's private upload folder.
+    """
 
-    username = session.get("username", "")
+    username = session.get(
+        "username",
+        ""
+    )
 
-    safe_username = secure_filename(username)
+    safe_username = secure_filename(
+        username
+    )
 
     user_folder = os.path.join(
         app.config["UPLOAD_FOLDER"],
@@ -130,8 +204,13 @@ def get_user_folder():
 
 
 def get_safe_file_path(filename):
+    """
+    Secure a filename and return its user-folder path.
+    """
 
-    safe_filename = secure_filename(filename)
+    safe_filename = secure_filename(
+        filename
+    )
 
     user_folder = get_user_folder()
 
@@ -140,13 +219,20 @@ def get_safe_file_path(filename):
         safe_filename
     )
 
-    return safe_filename, user_folder, file_path
+    return (
+        safe_filename,
+        user_folder,
+        file_path
+    )
 
 
-# ==============================
+# =========================================================
 # LOGIN
-# ==============================
-@app.route("/", methods=["GET", "POST"])
+# =========================================================
+@app.route(
+    "/",
+    methods=["GET", "POST"]
+)
 def login():
 
     if login_required():
@@ -169,7 +255,7 @@ def login():
         if not username or not password:
 
             flash(
-                "Please enter username and password.",
+                "Please enter your username and password.",
                 "danger"
             )
 
@@ -186,7 +272,11 @@ def login():
             password
         ):
 
-            session["username"] = user.username
+            session.clear()
+
+            session["username"] = (
+                user.username
+            )
 
             flash(
                 "Login successful.",
@@ -211,10 +301,13 @@ def login():
     )
 
 
-# ==============================
+# =========================================================
 # REGISTER
-# ==============================
-@app.route("/register", methods=["GET", "POST"])
+# =========================================================
+@app.route(
+    "/register",
+    methods=["GET", "POST"]
+)
 def register():
 
     if login_required():
@@ -274,7 +367,7 @@ def register():
         if existing_user:
 
             flash(
-                "Username already exists.",
+                "This username already exists.",
                 "danger"
             )
 
@@ -291,8 +384,26 @@ def register():
             password=hashed_password
         )
 
-        db.session.add(new_user)
-        db.session.commit()
+        try:
+
+            db.session.add(
+                new_user
+            )
+
+            db.session.commit()
+
+        except Exception:
+
+            db.session.rollback()
+
+            flash(
+                "Unable to create the account. Please try again.",
+                "danger"
+            )
+
+            return redirect(
+                url_for("register")
+            )
 
         user_folder = os.path.join(
             app.config["UPLOAD_FOLDER"],
@@ -318,13 +429,19 @@ def register():
     )
 
 
-# ==============================
+# =========================================================
 # DASHBOARD
-# ==============================
+# =========================================================
 @app.route("/dashboard")
 def dashboard():
 
     if not login_required():
+
+        flash(
+            "Please log in to continue.",
+            "warning"
+        )
+
         return redirect(
             url_for("login")
         )
@@ -338,19 +455,24 @@ def dashboard():
 
     files = []
 
-    for filename in os.listdir(user_folder):
+    for filename in os.listdir(
+        user_folder
+    ):
 
         file_path = os.path.join(
             user_folder,
             filename
         )
 
-        if not os.path.isfile(file_path):
+        if not os.path.isfile(
+            file_path
+        ):
             continue
 
         if (
             search_text
-            and search_text not in filename.lower()
+            and search_text
+            not in filename.lower()
         ):
             continue
 
@@ -361,8 +483,11 @@ def dashboard():
         file_extension = ""
 
         if "." in filename:
+
             file_extension = (
-                filename.rsplit(".", 1)[1].lower()
+                filename
+                .rsplit(".", 1)[1]
+                .lower()
             )
 
         files.append({
@@ -372,7 +497,8 @@ def dashboard():
         })
 
     files.sort(
-        key=lambda file: file["name"].lower()
+        key=lambda file:
+        file["name"].lower()
     )
 
     return render_template(
@@ -383,13 +509,22 @@ def dashboard():
     )
 
 
-# ==============================
-# UPLOAD
-# ==============================
-@app.route("/upload", methods=["GET", "POST"])
+# =========================================================
+# UPLOAD FILE
+# =========================================================
+@app.route(
+    "/upload",
+    methods=["GET", "POST"]
+)
 def upload():
 
     if not login_required():
+
+        flash(
+            "Please log in to upload files.",
+            "warning"
+        )
+
         return redirect(
             url_for("login")
         )
@@ -442,7 +577,7 @@ def upload():
         if not filename:
 
             flash(
-                "Invalid filename.",
+                "The selected filename is invalid.",
                 "danger"
             )
 
@@ -457,7 +592,9 @@ def upload():
             filename
         )
 
-        if os.path.exists(file_path):
+        if os.path.exists(
+            file_path
+        ):
 
             flash(
                 "A file with this name already exists.",
@@ -468,9 +605,22 @@ def upload():
                 url_for("upload")
             )
 
-        uploaded_file.save(
-            file_path
-        )
+        try:
+
+            uploaded_file.save(
+                file_path
+            )
+
+        except OSError:
+
+            flash(
+                "The file could not be saved.",
+                "danger"
+            )
+
+            return redirect(
+                url_for("upload")
+            )
 
         flash(
             "File uploaded successfully.",
@@ -486,13 +636,21 @@ def upload():
     )
 
 
-# ==============================
-# VIEW FILE IN BROWSER
-# ==============================
-@app.route("/view/<path:filename>")
+# =========================================================
+# VIEW FILE
+# =========================================================
+@app.route(
+    "/view/<path:filename>"
+)
 def view_file(filename):
 
     if not login_required():
+
+        flash(
+            "Please log in to view files.",
+            "warning"
+        )
+
         return redirect(
             url_for("login")
         )
@@ -501,7 +659,20 @@ def view_file(filename):
         get_safe_file_path(filename)
     )
 
-    if not os.path.isfile(file_path):
+    if not safe_filename:
+
+        flash(
+            "Invalid filename.",
+            "danger"
+        )
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+    if not os.path.isfile(
+        file_path
+    ):
 
         flash(
             "File not found.",
@@ -512,8 +683,10 @@ def view_file(filename):
             url_for("dashboard")
         )
 
-    mime_type, encoding = mimetypes.guess_type(
-        file_path
+    mime_type, encoding = (
+        mimetypes.guess_type(
+            file_path
+        )
     )
 
     return send_from_directory(
@@ -525,13 +698,21 @@ def view_file(filename):
     )
 
 
-# ==============================
+# =========================================================
 # DOWNLOAD FILE
-# ==============================
-@app.route("/download/<path:filename>")
+# =========================================================
+@app.route(
+    "/download/<path:filename>"
+)
 def download_file(filename):
 
     if not login_required():
+
+        flash(
+            "Please log in to download files.",
+            "warning"
+        )
+
         return redirect(
             url_for("login")
         )
@@ -540,7 +721,20 @@ def download_file(filename):
         get_safe_file_path(filename)
     )
 
-    if not os.path.isfile(file_path):
+    if not safe_filename:
+
+        flash(
+            "Invalid filename.",
+            "danger"
+        )
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+    if not os.path.isfile(
+        file_path
+    ):
 
         flash(
             "File not found.",
@@ -559,9 +753,9 @@ def download_file(filename):
     )
 
 
-# ==============================
+# =========================================================
 # DELETE FILE
-# ==============================
+# =========================================================
 @app.route(
     "/delete/<path:filename>",
     methods=["POST"]
@@ -569,6 +763,12 @@ def download_file(filename):
 def delete_file(filename):
 
     if not login_required():
+
+        flash(
+            "Please log in to delete files.",
+            "warning"
+        )
+
         return redirect(
             url_for("login")
         )
@@ -577,14 +777,38 @@ def delete_file(filename):
         get_safe_file_path(filename)
     )
 
-    if os.path.isfile(file_path):
-
-        os.remove(file_path)
+    if not safe_filename:
 
         flash(
-            "File deleted successfully.",
-            "success"
+            "Invalid filename.",
+            "danger"
         )
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+    if os.path.isfile(
+        file_path
+    ):
+
+        try:
+
+            os.remove(
+                file_path
+            )
+
+            flash(
+                "File deleted successfully.",
+                "success"
+            )
+
+        except OSError:
+
+            flash(
+                "The file could not be deleted.",
+                "danger"
+            )
 
     else:
 
@@ -598,9 +822,9 @@ def delete_file(filename):
     )
 
 
-# ==============================
+# =========================================================
 # LOGOUT
-# ==============================
+# =========================================================
 @app.route("/logout")
 def logout():
 
@@ -616,14 +840,14 @@ def logout():
     )
 
 
-# ==============================
+# =========================================================
 # FILE TOO LARGE ERROR
-# ==============================
+# =========================================================
 @app.errorhandler(413)
 def file_too_large(error):
 
     flash(
-        "File is too large. Maximum size is 16 MB.",
+        "File is too large. Maximum file size is 16 MB.",
         "danger"
     )
 
@@ -632,9 +856,9 @@ def file_too_large(error):
     )
 
 
-# ==============================
+# =========================================================
 # PAGE NOT FOUND ERROR
-# ==============================
+# =========================================================
 @app.errorhandler(404)
 def page_not_found(error):
 
@@ -644,6 +868,7 @@ def page_not_found(error):
     )
 
     if login_required():
+
         return redirect(
             url_for("dashboard")
         )
@@ -653,14 +878,26 @@ def page_not_found(error):
     )
 
 
-# ==============================
-# START APPLICATION
-# ==============================
+# =========================================================
+# INTERNAL SERVER ERROR
+# =========================================================
+@app.errorhandler(500)
+def internal_server_error(error):
+
+    db.session.rollback()
+
+    return render_template(
+        "500.html"
+    ), 500
+
+
+# =========================================================
+# START LOCAL DEVELOPMENT SERVER
+# =========================================================
 if __name__ == "__main__":
 
-    with app.app_context():
-        db.create_all()
-
     app.run(
+        host="0.0.0.0",
+        port=5000,
         debug=True
     )
