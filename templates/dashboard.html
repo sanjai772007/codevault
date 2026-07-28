@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Dashboard - CodeVault
+    </title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+</head>
+
+<body class="bg-light">
+
+
+<!-- ==============================
+     NAVIGATION BAR
+============================== -->
+
+<nav class="navbar navbar-dark bg-primary">
+
+    <div class="container">
+
+        <a
+            class="navbar-brand fw-bold"
+            href="{{ url_for('dashboard') }}"
+        >
+            🚀 CodeVault
+        </a>
+
+        <div class="d-flex align-items-center">
+
+            <span class="text-white me-3">
+
+                Welcome, {{ username }}
+
+            </span>
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="btn btn-light btn-sm"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+<!-- ==============================
+     MAIN CONTAINER
+============================== -->
+
+<div class="container py-4">
+
+
+    <!-- FLASH MESSAGES -->
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+
+        {% if messages %}
+
+            {% for category, message in messages %}
+
+                <div
+                    class="alert alert-{{ category }} alert-dismissible fade show"
+                    role="alert"
+                >
+
+                    {{ message }}
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="alert"
+                        aria-label="Close"
+                    >
+                    </button>
+
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    <!-- ==============================
+         PAGE HEADING
+    ============================== -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <div
+                class="d-flex flex-wrap justify-content-between align-items-center gap-3"
+            >
+
+                <div>
+
+                    <h3 class="mb-1">
+                        Your Files
+                    </h3>
+
+                    <p class="text-muted mb-0">
+
+                        Upload, view, search, download and manage your files.
+
+                    </p>
+
+                </div>
+
+                <a
+                    href="{{ url_for('upload') }}"
+                    class="btn btn-success"
+                >
+                    📤 Upload New File
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ==============================
+         SEARCH FORM
+    ============================== -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <form
+                method="GET"
+                action="{{ url_for('dashboard') }}"
+            >
+
+                <div class="input-group">
+
+                    <input
+                        type="text"
+                        name="search"
+                        class="form-control"
+                        placeholder="Search files by name"
+                        value="{{ search_text }}"
+                    >
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        Search
+                    </button>
+
+                    <a
+                        href="{{ url_for('dashboard') }}"
+                        class="btn btn-secondary"
+                    >
+                        Clear
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <!-- ==============================
+         FILE TABLE
+    ============================== -->
+
+    <div class="card shadow-sm">
+
+        <div class="card-body">
+
+            {% if files %}
+
+                <div class="table-responsive">
+
+                    <table
+                        class="table table-hover align-middle"
+                    >
+
+                        <thead class="table-dark">
+
+                            <tr>
+
+                                <th>
+                                    File Name
+                                </th>
+
+                                <th>
+                                    Type
+                                </th>
+
+                                <th>
+                                    Size
+                                </th>
+
+                                <th class="text-center">
+                                    Actions
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {% for file in files %}
+
+                                <tr>
+
+                                    <!-- FILE NAME -->
+
+                                    <td>
+
+                                        {% if file.extension == "pdf" %}
+
+                                            📕
+
+                                        {% elif file.extension in ["jpg", "jpeg", "png", "gif", "webp"] %}
+
+                                            🖼️
+
+                                        {% elif file.extension in ["py", "cpp", "c", "h", "java", "html", "css", "js"] %}
+
+                                            💻
+
+                                        {% elif file.extension in ["txt", "csv", "json"] %}
+
+                                            📄
+
+                                        {% elif file.extension == "zip" %}
+
+                                            🗜️
+
+                                        {% else %}
+
+                                            📁
+
+                                        {% endif %}
+
+                                        {{ file.name }}
+
+                                    </td>
+
+
+                                    <!-- FILE TYPE -->
+
+                                    <td>
+
+                                        {% if file.extension %}
+
+                                            {{ file.extension | upper }}
+
+                                        {% else %}
+
+                                            Unknown
+
+                                        {% endif %}
+
+                                    </td>
+
+
+                                    <!-- FILE SIZE -->
+
+                                    <td>
+
+                                        {% if file.size < 1024 %}
+
+                                            {{ file.size }} bytes
+
+                                        {% elif file.size < 1048576 %}
+
+                                            {{ (file.size / 1024) | round(2) }} KB
+
+                                        {% else %}
+
+                                            {{ (file.size / 1048576) | round(2) }} MB
+
+                                        {% endif %}
+
+                                    </td>
+
+
+                                    <!-- ACTION BUTTONS -->
+
+                                    <td class="text-center">
+
+                                        <a
+                                            href="{{ url_for('view_file', filename=file.name) }}"
+                                            target="_blank"
+                                            class="btn btn-success btn-sm mb-1"
+                                        >
+                                            👁 View
+                                        </a>
+
+                                        <a
+                                            href="{{ url_for('download_file', filename=file.name) }}"
+                                            class="btn btn-primary btn-sm mb-1"
+                                        >
+                                            ⬇ Download
+                                        </a>
+
+                                        <form
+                                            action="{{ url_for('delete_file', filename=file.name) }}"
+                                            method="POST"
+                                            class="d-inline"
+                                        >
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-danger btn-sm mb-1"
+                                                onclick="return confirm('Are you sure you want to delete this file?')"
+                                            >
+                                                🗑 Delete
+                                            </button>
+
+                                        </form>
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <!-- NO FILE MESSAGE -->
+
+                <div class="text-center py-5">
+
+                    <h4>
+                        No files found
+                    </h4>
+
+                    {% if search_text %}
+
+                        <p class="text-muted">
+
+                            No files match your search:
+                            <strong>{{ search_text }}</strong>
+
+                        </p>
+
+                        <a
+                            href="{{ url_for('dashboard') }}"
+                            class="btn btn-secondary"
+                        >
+                            Clear Search
+                        </a>
+
+                    {% else %}
+
+                        <p class="text-muted">
+
+                            Upload your first file to CodeVault.
+
+                        </p>
+
+                        <a
+                            href="{{ url_for('upload') }}"
+                            class="btn btn-success"
+                        >
+                            Upload File
+                        </a>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ==============================
+     BOOTSTRAP JAVASCRIPT
+============================== -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+>
+</script>
+
+
+</body>
+
+</html>
